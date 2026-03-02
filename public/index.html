@@ -1,0 +1,2085 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3U Editor Pro - Gestor de Listas IPTV</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            900: '#0f172a',
+                            800: '#1e293b',
+                            700: '#334155',
+                            600: '#475569'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+        }
+
+        .gradient-border {
+            position: relative;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            padding: 1px;
+            border-radius: 0.75rem;
+        }
+
+        .gradient-border > * {
+            background: #1e293b;
+            border-radius: 0.7rem;
+        }
+
+        .channel-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px -10px rgba(99, 102, 241, 0.3);
+        }
+
+        .status-online {
+            color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .status-offline {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .status-pending {
+            color: #f59e0b;
+            background: rgba(245, 158, 11, 0.1);
+        }
+
+        @keyframes pulse-scan {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .scanning {
+            animation: pulse-scan 1.5s ease-in-out infinite;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        .loading-spinner {
+            border: 3px solid #334155;
+            border-top: 3px solid #6366f1;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        .loading-spinner-sm {
+            border: 2px solid #334155;
+            border-top: 2px solid #6366f1;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-dark-900 text-slate-200 min-h-screen">
+
+    <!-- Login Screen -->
+    <div id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-dark-900"></div>
+        <div class="relative z-10 w-full max-w-md px-6">
+            <div class="bg-dark-800 rounded-2xl p-8 shadow-2xl border border-dark-700">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-play text-white text-2xl"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-white">M3U Editor Pro</h2>
+                    <p class="text-slate-400 mt-2">Ingresa tu PIN de acceso</p>
+                </div>
+
+                <form id="login-form" onsubmit="handleLogin(event)">
+                    <div class="mb-6">
+                        <input
+                            type="password"
+                            id="pin-input"
+                            maxlength="6"
+                            pattern="[0-9]{6}"
+                            required
+                            placeholder="••••••"
+                            class="w-full bg-dark-700 border border-dark-600 rounded-xl px-6 py-4 text-center text-2xl font-mono text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors tracking-[0.5em]"
+                            autocomplete="off"
+                        >
+                        <p id="login-error" class="text-red-400 text-sm mt-2 text-center hidden">
+                            <i class="fas fa-exclamation-circle mr-1"></i>
+                            <span>PIN incorrecto</span>
+                        </p>
+                    </div>
+
+                    <button
+                        type="submit"
+                        id="login-btn"
+                        class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2"
+                    >
+                        <i class="fas fa-sign-in-alt"></i>
+                        <span>Entrar</span>
+                    </button>
+                </form>
+
+                <p class="text-slate-500 text-xs text-center mt-6">
+                    Solo usuarios autorizados
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App (hidden until logged in) -->
+    <div id="main-app" class="hidden">
+
+    <!-- Header -->
+    <header class="glass sticky top-0 z-50 border-b border-dark-700">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-play text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-white">M3U Editor Pro</h1>
+                        <p class="text-xs text-slate-400">Gestor de Listas IPTV</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="downloadOnline()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm">
+                        <i class="fas fa-check-circle"></i>
+                        <span>Online</span>
+                    </button>
+                    <button onclick="downloadOffline()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm">
+                        <i class="fas fa-times-circle"></i>
+                        <span>Caídos</span>
+                    </button>
+                    <button onclick="downloadList()" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2">
+                        <i class="fas fa-download"></i>
+                        <span>Exportar .m3u</span>
+                    </button>
+                    <button onclick="logout()" class="bg-dark-700 hover:bg-dark-600 text-slate-400 hover:text-white px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm" title="Cerrar sesión">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+
+        <!-- Panel de Carga -->
+        <section class="mb-6">
+            <div class="gradient-border rounded-xl">
+                <div class="bg-dark-800 rounded-xl p-6">
+                    <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <i class="fas fa-folder-open text-indigo-400"></i>
+                        Cargar Lista M3U
+                    </h2>
+
+                    <!-- Tabs -->
+                    <div class="flex gap-2 mb-4">
+                        <button onclick="switchTab('file')" id="tab-file" class="px-4 py-2 rounded-lg font-medium transition-all bg-indigo-600 text-white">
+                            <i class="fas fa-file-upload mr-2"></i>Subir Archivo
+                        </button>
+                        <button onclick="switchTab('url')" id="tab-url" class="px-4 py-2 rounded-lg font-medium transition-all bg-dark-700 text-slate-400 hover:text-white">
+                            <i class="fas fa-link mr-2"></i>Desde URL
+                        </button>
+                        <button onclick="switchTab('paste')" id="tab-paste" class="px-4 py-2 rounded-lg font-medium transition-all bg-dark-700 text-slate-400 hover:text-white">
+                            <i class="fas fa-paste mr-2"></i>Pegar Lista
+                        </button>
+                    </div>
+
+                    <!-- File Input -->
+                    <div id="panel-file" class="block">
+                        <div class="border-2 border-dashed border-dark-600 rounded-xl p-8 text-center hover:border-indigo-500 transition-colors cursor-pointer" onclick="document.getElementById('fileInput').click()">
+                            <input type="file" id="fileInput" accept=".m3u,.m3u8" class="hidden" onchange="handleFileSelect(event)">
+                            <i class="fas fa-cloud-upload-alt text-4xl text-indigo-400 mb-3"></i>
+                            <p class="text-slate-300 font-medium">Haz clic o arrastra tu archivo .m3u</p>
+                            <p class="text-slate-500 text-sm mt-1">Archivos soportados: .m3u, .m3u8</p>
+                        </div>
+                    </div>
+
+                    <!-- URL Input -->
+                    <div id="panel-url" class="hidden">
+                        <div class="flex gap-3">
+                            <input type="text" id="urlInput" placeholder="Pega aquí la URL de tu lista M3U..."
+                                class="flex-1 bg-dark-700 border border-dark-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors">
+                            <button onclick="loadFromURL()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2">
+                                <i class="fas fa-download"></i>
+                                Cargar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Paste Input -->
+                    <div id="panel-paste" class="hidden">
+                        <div class="space-y-3">
+                            <textarea id="pasteInput" rows="8" placeholder="Pega aquí el contenido de tu lista M3U..."
+                                class="w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors font-mono text-sm"></textarea>
+                            <button onclick="loadFromPaste()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2">
+                                <i class="fas fa-check"></i>
+                                Cargar Lista
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Estadísticas -->
+        <section id="stats-section" class="mb-6 hidden">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-dark-800 rounded-xl p-4 border border-dark-700 fade-in">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-slate-400 text-sm">Total Canales</p>
+                            <p id="stat-total" class="text-2xl font-bold text-white">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-list text-indigo-400 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-dark-800 rounded-xl p-4 border border-dark-700 fade-in" style="animation-delay: 0.1s">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-slate-400 text-sm">En Línea</p>
+                            <p id="stat-online" class="text-2xl font-bold text-emerald-400">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-check-circle text-emerald-400 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-dark-800 rounded-xl p-4 border border-dark-700 fade-in" style="animation-delay: 0.2s">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-slate-400 text-sm">Caídos</p>
+                            <p id="stat-offline" class="text-2xl font-bold text-red-400">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-times-circle text-red-400 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-dark-800 rounded-xl p-4 border border-dark-700 fade-in" style="animation-delay: 0.3s">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-slate-400 text-sm">Pendientes</p>
+                            <p id="stat-pending" class="text-2xl font-bold text-amber-400">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-clock text-amber-400 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Barra de Progreso -->
+        <section id="progress-section" class="mb-6 hidden">
+            <div class="bg-dark-800 rounded-xl p-4 border border-dark-700">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-slate-300">
+                        <i class="fas fa-radar mr-2 text-indigo-400 scanning"></i>Escaneando canales...
+                    </span>
+                    <span id="progress-text" class="text-sm text-slate-400">0 / 0</span>
+                </div>
+                <div class="w-full bg-dark-700 rounded-full h-3 overflow-hidden">
+                    <div id="progress-bar" class="bg-gradient-to-r from-indigo-500 to-purple-500 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <p id="progress-status" class="text-xs text-slate-500 mt-2">Preparando escaneo...</p>
+            </div>
+        </section>
+
+        <!-- Panel de Control -->
+        <section id="controls-section" class="mb-6 hidden">
+            <div class="bg-dark-800 rounded-xl p-4 border border-dark-700">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button onclick="scanAllChannels()" id="btn-scan" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2">
+                            <i class="fas fa-radar"></i>
+                            <span>Escanear Todo</span>
+                        </button>
+                        <button onclick="showOnlineOnly()" class="bg-dark-700 hover:bg-dark-600 text-emerald-400 px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2">
+                            <i class="fas fa-check"></i>
+                            Solo en Línea
+                        </button>
+                        <button onclick="showOfflineOnly()" class="bg-dark-700 hover:bg-dark-600 text-red-400 px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2">
+                            <i class="fas fa-times"></i>
+                            Solo Caídos
+                        </button>
+                        <button onclick="showAllChannels()" class="bg-dark-700 hover:bg-dark-600 text-slate-300 px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2">
+                            <i class="fas fa-list"></i>
+                            Ver Todos
+                        </button>
+                        <button onclick="removeOfflineChannels()" class="bg-red-600/20 hover:bg-red-600/30 text-red-400 px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2">
+                            <i class="fas fa-trash"></i>
+                            Eliminar Caídos
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="relative">
+                            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500"></i>
+                            <input type="text" id="searchInput" onkeyup="searchChannels()"
+                                placeholder="Buscar canal..."
+                                class="bg-dark-700 border border-dark-600 rounded-lg pl-10 pr-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors w-64">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Lista de Canales -->
+        <section id="channels-section" class="hidden">
+            <div class="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-dark-700/50">
+                            <tr>
+                                <th class="text-left px-4 py-3 text-slate-400 font-medium text-sm">Estado</th>
+                                <th class="text-left px-4 py-3 text-slate-400 font-medium text-sm">Canal</th>
+                                <th class="text-left px-4 py-3 text-slate-400 font-medium text-sm">Grupo</th>
+                                <th class="text-left px-4 py-3 text-slate-400 font-medium text-sm">URL</th>
+                                <th class="text-left px-4 py-3 text-slate-400 font-medium text-sm">Latencia</th>
+                                <th class="text-center px-4 py-3 text-slate-400 font-medium text-sm">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="channels-table">
+                            <!-- Canales se insertarán aquí -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Mensaje cuando no hay canales -->
+                <div id="empty-message" class="hidden p-12 text-center">
+                    <i class="fas fa-folder-open text-5xl text-slate-600 mb-4"></i>
+                    <p class="text-slate-400 text-lg">No se encontraron canales</p>
+                    <p class="text-slate-500 text-sm mt-1">Carga una lista M3U para comenzar</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Mensaje de bienvenida -->
+        <section id="welcome-section" class="py-20 text-center">
+            <div class="max-w-md mx-auto">
+                <div class="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <i class="fas fa-tv text-3xl text-white"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-white mb-3">Bienvenido a M3U Editor Pro</h2>
+                <p class="text-slate-400 mb-6">Carga tu lista M3U para escanear, editar y exportar tus canales IPTV</p>
+                <div class="flex flex-wrap justify-center gap-4 text-sm text-slate-500">
+                    <span class="flex items-center gap-2"><i class="fas fa-check text-emerald-400"></i> Escaneo rápido</span>
+                    <span class="flex items-center gap-2"><i class="fas fa-check text-emerald-400"></i> Editor visual</span>
+                    <span class="flex items-center gap-2"><i class="fas fa-check text-emerald-400"></i> Exportar M3U</span>
+                </div>
+            </div>
+        </section>
+
+    </main>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50"></div>
+
+    <script>
+        // Variables globales
+        let channels = [];
+        let filteredChannels = [];
+        let isScanning = false;
+        let currentFilter = 'all';
+        let authToken = localStorage.getItem('m3u_auth_token');
+
+        // ==========================================
+        // FUNCIONES DE AUTENTICACIÓN
+        // ==========================================
+
+        // Verificar si ya está autenticado al cargar
+        async function checkAuth() {
+            if (!authToken) {
+                return false;
+            }
+
+            try {
+                const res = await fetch('/api/auth-check', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (res.ok) {
+                    return true;
+                } else {
+                    // Token inválido, limpiar
+                    localStorage.removeItem('m3u_auth_token');
+                    authToken = null;
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error verificando auth:', error);
+                return false;
+            }
+        }
+
+        // Mostrar pantalla de login
+        function showLogin() {
+            document.getElementById('login-screen').classList.remove('hidden');
+            document.getElementById('main-app').classList.add('hidden');
+            document.getElementById('pin-input').focus();
+        }
+
+        // Mostrar app principal
+        function showMainApp() {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('main-app').classList.remove('hidden');
+        }
+
+        // Manejar login
+        async function handleLogin(event) {
+            event.preventDefault();
+
+            const pin = document.getElementById('pin-input').value;
+            const btn = document.getElementById('login-btn');
+            const errorMsg = document.getElementById('login-error');
+
+            // Validar que sea 6 dígitos
+            if (pin.length !== 6 || !/^\d+$/.test(pin)) {
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loading-spinner"></div> Verificando...';
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ pin })
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    // Guardar token
+                    authToken = data.token;
+                    localStorage.setItem('m3u_auth_token', data.token);
+
+                    // Mostrar app
+                    showMainApp();
+                    showToast('Bienvenido a M3U Editor Pro', 'success');
+                } else {
+                    errorMsg.classList.remove('hidden');
+                    document.getElementById('pin-input').value = '';
+                    document.getElementById('pin-input').focus();
+                }
+            } catch (error) {
+                console.error('Error en login:', error);
+                showToast('Error de conexión', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>Entrar</span>';
+            }
+        }
+
+        // Función para hacer requests autenticadas
+        async function authFetch(url, options = {}) {
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    ...options.headers,
+                    'Authorization': `Bearer ${authToken}`
+                }
+            });
+
+            if (response.status === 401) {
+                // Token expirado o inválido
+                localStorage.removeItem('m3u_auth_token');
+                authToken = null;
+                showLogin();
+                throw new Error('Sesión expirada');
+            }
+
+            return response;
+        }
+
+        // Cerrar sesión
+        function logout() {
+            localStorage.removeItem('m3u_auth_token');
+            authToken = null;
+            showLogin();
+            showToast('Sesión cerrada', 'info');
+        }
+
+        // ==========================================
+        // INICIALIZACIÓN
+        // ==========================================
+
+        // Verificar auth al cargar la página
+        (async function init() {
+            const isAuthenticated = await checkAuth();
+            if (isAuthenticated) {
+                showMainApp();
+            } else {
+                showLogin();
+            }
+        })();
+
+        // ==========================================
+        // FUNCIONES DE INTERFAZ
+        // ==========================================
+
+        function switchTab(tab) {
+            document.getElementById('panel-file').classList.add('hidden');
+            document.getElementById('panel-url').classList.add('hidden');
+            document.getElementById('panel-paste').classList.add('hidden');
+            document.getElementById('tab-file').classList.remove('bg-indigo-600', 'text-white');
+            document.getElementById('tab-file').classList.add('bg-dark-700', 'text-slate-400');
+            document.getElementById('tab-url').classList.remove('bg-indigo-600', 'text-white');
+            document.getElementById('tab-url').classList.add('bg-dark-700', 'text-slate-400');
+            document.getElementById('tab-paste').classList.remove('bg-indigo-600', 'text-white');
+            document.getElementById('tab-paste').classList.add('bg-dark-700', 'text-slate-400');
+
+            document.getElementById('panel-' + tab).classList.remove('hidden');
+            document.getElementById('tab-' + tab).classList.add('bg-indigo-600', 'text-white');
+            document.getElementById('tab-' + tab).classList.remove('bg-dark-700', 'text-slate-400');
+        }
+
+        function showToast(message, type = 'info') {
+            const colors = {
+                success: 'bg-emerald-600',
+                error: 'bg-red-600',
+                warning: 'bg-amber-600',
+                info: 'bg-indigo-600'
+            };
+
+            const icons = {
+                success: 'check-circle',
+                error: 'exclamation-circle',
+                warning: 'exclamation-triangle',
+                info: 'info-circle'
+            };
+
+            const toast = document.createElement('div');
+            toast.className = `${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg mb-2 flex items-center gap-2 transform transition-all duration-300 translate-x-full`;
+            toast.innerHTML = `<i class="fas fa-${icons[type]}"></i> ${message}`;
+
+            document.getElementById('toast-container').appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-x-full');
+            }, 100);
+
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function showSection() {
+            document.getElementById('welcome-section').classList.add('hidden');
+            document.getElementById('stats-section').classList.remove('hidden');
+            document.getElementById('controls-section').classList.remove('hidden');
+            document.getElementById('channels-section').classList.remove('hidden');
+        }
+
+        // ==========================================
+        // FUNCIONES DE CARGA DE ARCHIVOS
+        // ==========================================
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                parseAndLoadM3U(e.target.result);
+                showToast('Archivo cargado correctamente', 'success');
+            };
+            reader.onerror = function() {
+                showToast('Error al leer el archivo', 'error');
+            };
+            reader.readAsText(file);
+        }
+
+        async function loadFromURL() {
+            const url = document.getElementById('urlInput').value.trim();
+            if (!url) {
+                showToast('Por favor ingresa una URL', 'warning');
+                return;
+            }
+
+            const btn = event.target;
+            btn.innerHTML = '<div class="loading-spinner"></div> Cargando...';
+            btn.disabled = true;
+
+            try {
+                const res = await authFetch('/load', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+
+                if (!res.ok) throw new Error('Error al cargar');
+
+                const text = await res.text();
+                parseAndLoadM3U(text);
+                showToast('Lista cargada desde URL', 'success');
+            } catch (error) {
+                if (error.message !== 'Sesión expirada') {
+                    showToast('No se pudo cargar la lista: ' + error.message, 'error');
+                }
+            } finally {
+                btn.innerHTML = '<i class="fas fa-download"></i> Cargar';
+                btn.disabled = false;
+            }
+        }
+
+        function loadFromPaste() {
+            const text = document.getElementById('pasteInput').value.trim();
+            if (!text) {
+                showToast('Por favor pega el contenido de tu lista M3U', 'warning');
+                return;
+            }
+
+            if (!text.includes('#EXTM3U') && !text.includes('#EXTINF:')) {
+                showToast('El contenido no parece ser una lista M3U válida', 'error');
+                return;
+            }
+
+            parseAndLoadM3U(text);
+            showToast('Lista cargada correctamente', 'success');
+            document.getElementById('pasteInput').value = '';
+        }
+
+        // ==========================================
+        // PARSER M3U
+        // ==========================================
+
+        function parseAndLoadM3U(text) {
+            const lines = text.split('\n');
+            channels = [];
+
+            let currentChannel = null;
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+
+                if (line.startsWith('#EXTINF:')) {
+                    const attributes = {};
+
+                    const tvgNameMatch = line.match(/tvg-name="([^"]*)"/i);
+                    if (tvgNameMatch) attributes.tvgName = tvgNameMatch[1];
+
+                    const tvgLogoMatch = line.match(/tvg-logo="([^"]*)"/i);
+                    if (tvgLogoMatch) attributes.tvgLogo = tvgLogoMatch[1];
+
+                    const groupMatch = line.match(/group-title="([^"]*)"/i);
+                    if (groupMatch) attributes.group = groupMatch[1];
+
+                    const commaIndex = line.indexOf(',');
+                    const name = commaIndex > -1 ? line.substring(commaIndex + 1).trim() : 'Sin nombre';
+
+                    currentChannel = {
+                        id: channels.length,
+                        name: name,
+                        logo: attributes.tvgLogo || '',
+                        group: attributes.group || 'Sin grupo',
+                        url: '',
+                        status: 'pending',
+                        latency: null,
+                        error: null
+                    };
+                } else if (line && !line.startsWith('#') && currentChannel) {
+                    currentChannel.url = line;
+                    channels.push(currentChannel);
+                    currentChannel = null;
+                }
+            }
+
+            filteredChannels = [...channels];
+            updateStats();
+            renderChannels();
+            showSection();
+        }
+
+        // ==========================================
+        // ESTADÍSTICAS
+        // ==========================================
+
+        function updateStats() {
+            const total = channels.length;
+            const online = channels.filter(c => c.status === 'online').length;
+            const offline = channels.filter(c => c.status === 'offline').length;
+            const pending = channels.filter(c => c.status === 'pending').length;
+
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-online').textContent = online;
+            document.getElementById('stat-offline').textContent = offline;
+            document.getElementById('stat-pending').textContent = pending;
+        }
+
+        // ==========================================
+        // ESCANEO DE CANALES
+        // ==========================================
+
+        async function scanAllChannels() {
+            if (channels.length === 0) {
+                showToast('No hay canales para escanear', 'warning');
+                return;
+            }
+
+            if (isScanning) {
+                showToast('Escaneo en progreso...', 'warning');
+                return;
+            }
+
+            isScanning = true;
+            document.getElementById('progress-section').classList.remove('hidden');
+            document.getElementById('btn-scan').disabled = true;
+            document.getElementById('btn-scan').innerHTML = '<div class="loading-spinner"></div> Escaneando...';
+
+            const urls = channels.map(c => c.url);
+            const total = urls.length;
+            let scanned = 0;
+
+            // Procesar en lotes de 10
+            const batchSize = 10;
+
+            for (let i = 0; i < urls.length; i += batchSize) {
+                const batch = urls.slice(i, i + batchSize);
+
+                try {
+                    const res = await authFetch('/scan', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ urls: batch })
+                    });
+
+                    const results = await res.json();
+
+                    results.forEach((result, index) => {
+                        const channelIndex = i + index;
+                        if (channelIndex < channels.length) {
+                            channels[channelIndex].status = result.status;
+                            channels[channelIndex].latency = result.latency || null;
+                            channels[channelIndex].error = result.error || null;
+                        }
+                    });
+
+                    scanned += results.length;
+
+                    const percent = Math.round((scanned / total) * 100);
+                    document.getElementById('progress-bar').style.width = percent + '%';
+                    document.getElementById('progress-text').textContent = `${scanned} / ${total}`;
+                    document.getElementById('progress-status').textContent = `Escaneando lote ${Math.ceil(i/batchSize) + 1} de ${Math.ceil(total/batchSize)}...`;
+
+                    updateStats();
+                    renderChannels();
+
+                } catch (error) {
+                    console.error('Error en escaneo:', error);
+                    showToast('Error al escanear algunos canales', 'error');
+                }
+
+                await new Promise(r => setTimeout(r, 500));
+            }
+
+            isScanning = false;
+            document.getElementById('progress-section').classList.add('hidden');
+            document.getElementById('btn-scan').disabled = false;
+            document.getElementById('btn-scan').innerHTML = '<i class="fas fa-radar"></i> <span>Escanear Todo</span>';
+
+            const online = channels.filter(c => c.status === 'online').length;
+            showToast(`Escaneo completado: ${online} canales en línea`, 'success');
+
+            applyFilter();
+        }
+
+        // ==========================================
+        // RENDERIZADO DE CANALES
+        // ==========================================
+
+        function renderChannels() {
+            const tbody = document.getElementById('channels-table');
+            const listToRender = filteredChannels.length > 0 || currentFilter !== 'all' || document.getElementById('searchInput').value ? filteredChannels : channels;
+
+            if (listToRender.length === 0) {
+                document.getElementById('empty-message').classList.remove('hidden');
+                tbody.innerHTML = '';
+                return;
+            }
+
+            document.getElementById('empty-message').classList.add('hidden');
+
+            tbody.innerHTML = listToRender.map(channel => {
+                const statusClass = channel.status === 'online' ? 'status-online' :
+                                   channel.status === 'offline' ? 'status-offline' : 'status-pending';
+                const statusIcon = channel.status === 'online' ? 'fa-check-circle' :
+                                  channel.status === 'offline' ? 'fa-times-circle' : 'fa-clock';
+                const statusText = channel.status === 'online' ? 'En línea' :
+                                 channel.status === 'offline' ? 'Caído' : 'Pendiente';
+
+                return `
+                    <tr class="channel-card border-b border-dark-700/50 hover:bg-dark-700/30 transition-all">
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusClass}">
+                                <i class="fas ${statusIcon}"></i>
+                                ${statusText}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="flex flex-col gap-2">
+                                <div class="flex items-center gap-2">
+                                    <input type="text" value="${channel.name}"
+                                        onchange="updateChannelName(${channel.id}, this.value)"
+                                        placeholder="Nombre del canal"
+                                        class="bg-dark-700 border border-dark-600 rounded px-2 py-1 text-sm text-white font-medium focus:outline-none focus:border-indigo-500 w-48">
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="text" value="${channel.logo || ''}"
+                                        onchange="updateChannelLogo(${channel.id}, this.value)"
+                                        placeholder="URL del logo"
+                                        class="bg-dark-700 border border-dark-600 rounded px-2 py-1 text-xs text-slate-400 focus:outline-none focus:border-indigo-500 w-48">
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <input type="text" value="${channel.group}"
+                                onchange="updateChannelGroup(${channel.id}, this.value)"
+                                placeholder="Categoría"
+                                class="bg-dark-700 border border-dark-600 rounded px-2 py-1 text-sm text-slate-400 focus:outline-none focus:border-indigo-500 w-32">
+                        </td>
+                        <td class="px-4 py-3">
+                            <input type="text" value="${channel.url}"
+                                onchange="updateChannelURL(${channel.id}, this.value)"
+                                class="bg-dark-700 border border-dark-600 rounded px-2 py-1 text-sm text-slate-300 w-64 focus:outline-none focus:border-indigo-500">
+                        </td>
+                        <td class="px-4 py-3">
+                            ${channel.latency ? `<span class="text-emerald-400 text-sm">${channel.latency}ms</span>` :
+                              channel.status === 'offline' ? `<span class="text-red-400 text-sm">${channel.error || 'Error'}</span>` :
+                              '<span class="text-slate-500">-</span>'}
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <div class="flex items-center justify-center gap-2">
+                                <button onclick="testChannel(${channel.id})" class="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/20 rounded-lg transition-all" title="Probar">
+                                    <i class="fas fa-bolt"></i>
+                                </button>
+                                <button onclick="deleteChannel(${channel.id})" class="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition-all" title="Eliminar">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // ==========================================
+        // ACCIONES DE CANALES
+        // ==========================================
+
+        function updateChannelURL(id, newURL) {
+            const channel = channels.find(c => c.id === id);
+            if (channel) {
+                channel.url = newURL;
+                channel.status = 'pending';
+                updateStats();
+                showToast('URL actualizada', 'success');
+            }
+        }
+
+        function updateChannelName(id, newName) {
+            const channel = channels.find(c => c.id === id);
+            if (channel) {
+                channel.name = newName;
+                showToast('Nombre actualizado', 'success');
+            }
+        }
+
+        function updateChannelLogo(id, newLogo) {
+            const channel = channels.find(c => c.id === id);
+            if (channel) {
+                channel.logo = newLogo;
+                renderChannels();
+                showToast('Logo actualizado', 'success');
+            }
+        }
+
+        function updateChannelGroup(id, newGroup) {
+            const channel = channels.find(c => c.id === id);
+            if (channel) {
+                channel.group = newGroup;
+                showToast('Categoría actualizada', 'success');
+            }
+        }
+
+        async function testChannel(id) {
+            const channel = channels.find(c => c.id === id);
+            if (!channel) return;
+
+            const btn = event.target.closest('button');
+            btn.innerHTML = '<div class="loading-spinner w-4 h-4"></div>';
+            btn.disabled = true;
+
+            try {
+                const res = await authFetch('/scan-single', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: channel.url })
+                });
+
+                const result = await res.json();
+
+                channel.status = result.status;
+                channel.latency = result.latency || null;
+                channel.error = result.error || null;
+
+                updateStats();
+                renderChannels();
+
+                showToast(channel.status === 'online' ? 'Canal en línea' : 'Canal caído',
+                         channel.status === 'online' ? 'success' : 'error');
+
+            } catch (error) {
+                showToast('Error al probar canal', 'error');
+            } finally {
+                btn.innerHTML = '<i class="fas fa-bolt"></i>';
+                btn.disabled = false;
+            }
+        }
+
+        function deleteChannel(id) {
+            channels = channels.filter(c => c.id !== id);
+            updateStats();
+            applyFilter();
+            showToast('Canal eliminado', 'success');
+        }
+
+        function removeOfflineChannels() {
+            const count = channels.filter(c => c.status === 'offline').length;
+            if (count === 0) {
+                showToast('No hay canales caídos para eliminar', 'info');
+                return;
+            }
+
+            channels = channels.filter(c => c.status !== 'offline');
+            updateStats();
+            applyFilter();
+            showToast(`${count} canales caídos eliminados`, 'success');
+        }
+
+        // ==========================================
+        // FILTROS Y BÚSQUEDA
+        // ==========================================
+
+        function searchChannels() {
+            applyFilter();
+        }
+
+        function applyFilter() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+
+            filteredChannels = channels.filter(channel => {
+                const matchesSearch = channel.name.toLowerCase().includes(search) ||
+                                     channel.group.toLowerCase().includes(search);
+
+                let matchesFilter = true;
+                if (currentFilter === 'online') matchesFilter = channel.status === 'online';
+                else if (currentFilter === 'offline') matchesFilter = channel.status === 'offline';
+
+                return matchesSearch && matchesFilter;
+            });
+
+            renderChannels();
+        }
+
+        function showAllChannels() {
+            currentFilter = 'all';
+            applyFilter();
+            showToast('Mostrando todos los canales', 'info');
+        }
+
+        function showOnlineOnly() {
+            currentFilter = 'online';
+            applyFilter();
+            showToast('Mostrando solo canales en línea', 'info');
+        }
+
+        function showOfflineOnly() {
+            currentFilter = 'offline';
+            applyFilter();
+            showToast('Mostrando solo canales caídos', 'info');
+        }
+
+        // ==========================================
+        // EXPORTAR LISTAS
+        // ==========================================
+
+        function createM3UContent(channelList) {
+            let text = '#EXTM3U\n';
+
+            channelList.forEach(channel => {
+                text += `#EXTINF:-1 tvg-name="${channel.name}" tvg-logo="${channel.logo || ''}" group-title="${channel.group}",${channel.name}\n`;
+                text += `${channel.url}\n`;
+            });
+
+            return text;
+        }
+
+        function downloadM3U(text, filename) {
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Descargar todos los canales
+        function downloadList() {
+            if (channels.length === 0) {
+                showToast('No hay canales para exportar', 'warning');
+                return;
+            }
+
+            const text = createM3UContent(channels);
+            downloadM3U(text, 'lista_editada.m3u');
+            showToast('Lista exportada correctamente', 'success');
+        }
+
+        // Descargar solo canales en línea
+        function downloadOnline() {
+            const onlineChannels = channels.filter(c => c.status === 'online');
+
+            if (onlineChannels.length === 0) {
+                showToast('No hay canales en línea para exportar', 'warning');
+                return;
+            }
+
+            const text = createM3UContent(onlineChannels);
+            downloadM3U(text, 'canales_online.m3u');
+            showToast(`${onlineChannels.length} canales en línea exportados`, 'success');
+        }
+
+        // Descargar solo canales caídos
+        function downloadOffline() {
+            const offlineChannels = channels.filter(c => c.status === 'offline');
+
+            if (offlineChannels.length === 0) {
+                showToast('No hay canales caídos para exportar', 'warning');
+                return;
+            }
+
+            const text = createM3UContent(offlineChannels);
+            downloadM3U(text, 'canales_caidos.m3u');
+            showToast(`${offlineChannels.length} canales caídos exportados`, 'success');
+        }
+    </script>
+
+<script>
+/**
+ * Iframe 元素高亮注入脚本
+ * 需要在目标网站中引入此脚本来支持跨域 iframe 高亮功能
+ *
+ * 使用方法：
+ * 1. 将此脚本添加到目标网站的 HTML 中
+ * 2. 或通过浏览器扩展、用户脚本等方式注入
+ */
+
+(function () {
+  "use strict";
+
+  // 检查是否在 iframe 中
+  if (window.self === window.top) {
+    return; // 不在 iframe 中，不执行
+  }
+
+  // 检查是否已经初始化过
+  if (window.__iframeHighlightInitialized) {
+    return;
+  }
+  window.__iframeHighlightInitialized = true;
+  console.log("Iframe 高亮脚本已加载");
+
+  // 创建高亮覆盖层
+  var overlay = document.createElement("div");
+  overlay.id = "iframe-highlight-overlay";
+  overlay.style.cssText = "\n    position: fixed;\n    top: 0;\n    left: 0;\n    width: 100vw;\n    height: 100vh;\n    pointer-events: none;\n    z-index: 999999;\n    overflow: hidden;\n  ";
+
+  // 创建悬停高亮框（虚线边框）
+  var highlightBox = document.createElement("div");
+  highlightBox.id = "iframe-highlight-box";
+  highlightBox.style.cssText = "\n    position: absolute;\n    border: 2px dashed #007AFF;\n    background: rgba(0, 122, 255, 0.08);\n    pointer-events: none;\n    display: none;\n    transition: all 0.1s ease;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);\n    border-radius: 2px;\n  ";
+
+  // 创建选中节点的常驻高亮框（实线边框）
+  var selectedBox = document.createElement("div");
+  selectedBox.id = "iframe-selected-box";
+  selectedBox.style.cssText = "\n    position: absolute;\n    border: 2px solid #007AFF;\n    pointer-events: none;\n    display: none;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 107, 53, 0.4);\n    border-radius: 2px;\n    z-index: 1000000;\n  ";
+
+  // 创建悬停标签显示
+  var tagLabel = document.createElement("div");
+  tagLabel.id = "iframe-tag-label";
+  tagLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 2px 6px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 2px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000001;\n    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);\n    font-weight: 500;\n  ";
+
+  // 创建选中节点标签
+  var selectedLabel = document.createElement("div");
+  selectedLabel.id = "iframe-selected-label";
+  selectedLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 3px 8px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 3px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000002;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);\n    font-weight: 600;\n  ";
+  overlay.appendChild(highlightBox);
+  overlay.appendChild(selectedBox);
+  overlay.appendChild(tagLabel);
+  overlay.appendChild(selectedLabel);
+  document.body.appendChild(overlay);
+
+  // 存储当前选中的元素
+  var selectedElement = null;
+  var highlightEnabled = false;
+
+  // 更新选中元素的高亮显示
+  function updateSelectedHighlight(element) {
+    console.log("updateSelectedHighlight called with:", element);
+    if (!element) {
+      selectedBox.style.display = "none";
+      selectedLabel.style.display = "none";
+      selectedElement = null;
+      console.log("Cleared selected highlight");
+      return;
+    }
+    selectedElement = element;
+    var rect = element.getBoundingClientRect();
+    console.log("Selected element rect:", rect);
+
+    // 更新选中高亮框位置
+    selectedBox.style.display = "block";
+    selectedBox.style.left = "".concat(rect.left - 2, "px");
+    selectedBox.style.top = "".concat(rect.top - 2, "px");
+    selectedBox.style.width = "".concat(rect.width + 4, "px");
+    selectedBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新选中标签位置和内容
+    selectedLabel.style.display = "block";
+    selectedLabel.textContent = "\u2713 <".concat(element.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 28;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 5) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    var labelWidth = selectedLabel.offsetWidth || 100; // 预估宽度
+    if (labelLeft + labelWidth > window.innerWidth - 10) {
+      labelLeft = window.innerWidth - labelWidth - 10;
+    }
+    selectedLabel.style.left = "".concat(Math.max(5, labelLeft), "px");
+    selectedLabel.style.top = "".concat(labelTop, "px");
+    console.log("Selected highlight positioned at:", {
+      left: selectedBox.style.left,
+      top: selectedBox.style.top,
+      width: selectedBox.style.width,
+      height: selectedBox.style.height
+    });
+  }
+  function getElementSelector(element) {
+    if (!(element instanceof Element)) throw new Error('Argument must be a DOM element');
+    var segments = [];
+    var current = element;
+    while (current !== document.documentElement) {
+      var selector = '';
+      // 优先检查唯一ID
+      if (current.id && document.querySelectorAll("#".concat(current.id)).length === 1) {
+        segments.unshift("#".concat(current.id));
+        break; // ID唯一，无需继续向上
+      }
+
+      // 生成类名选择器（取第一个有效类名）
+      var classes = Array.from(current.classList).filter(function (c) {
+        return !c.startsWith('js-');
+      });
+      var className = classes.length > 0 ? ".".concat(classes[0]) : '';
+
+      // 生成位置索引（nth-child）
+      var tag = current.tagName.toLowerCase();
+      if (!className) {
+        var siblings = Array.from(current.parentNode.children);
+        var index = siblings.findIndex(function (el) {
+          return el === current;
+        }) + 1;
+        selector = "".concat(tag, ":nth-child(").concat(index, ")");
+      } else {
+        selector = className;
+      }
+      segments.unshift(selector);
+      current = current.parentElement;
+    }
+
+    // 处理根元素
+    if (current === document.documentElement) {
+      segments.unshift('html');
+    }
+    return segments.join(' > ');
+  }
+
+  // 获取元素文本内容
+  function getElementText(element) {
+    var _element$textContent;
+    if (element.tagName === "INPUT") {
+      return element.value || element.placeholder || "";
+    }
+    if (element.tagName === "TEXTAREA") {
+      return element.value || element.placeholder || "";
+    }
+    var text = ((_element$textContent = element.textContent) === null || _element$textContent === void 0 ? void 0 : _element$textContent.trim()) || "";
+    return text.length > 50 ? text.substring(0, 50) + "..." : text;
+  }
+
+  // 获取元素属性信息
+  function getElementAttributes(element) {
+    var attrs = {};
+    for (var i = 0; i < element.attributes.length; i++) {
+      var attr = element.attributes[i];
+      attrs[attr.name] = attr.value;
+    }
+    return attrs;
+  }
+
+  // 鼠标悬停事件处理
+  function handleMouseOver(e) {
+    if (!highlightEnabled) return;
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免高亮 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 如果是已选中的元素，不显示悬停高亮
+    if (target === selectedElement) {
+      highlightBox.style.display = "none";
+      tagLabel.style.display = "none";
+      return;
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+
+    // 更新悬停高亮框位置
+    highlightBox.style.display = "block";
+    highlightBox.style.left = "".concat(rect.left - 2, "px");
+    highlightBox.style.top = "".concat(rect.top - 2, "px");
+    highlightBox.style.width = "".concat(rect.width + 4, "px");
+    highlightBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新标签位置和内容
+    tagLabel.style.display = "block";
+    tagLabel.textContent = "<".concat(target.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 22;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 0) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    if (labelLeft + tagLabel.offsetWidth > window.innerWidth) {
+      labelLeft = window.innerWidth - tagLabel.offsetWidth - 5;
+    }
+    tagLabel.style.left = "".concat(Math.max(0, labelLeft), "px");
+    tagLabel.style.top = "".concat(labelTop, "px");
+
+    // 发送消息到父窗口
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 鼠标离开事件处理
+  function handleMouseOut(e) {
+    if (!highlightEnabled) return;
+    var relatedTarget = e.relatedTarget;
+
+    // 如果鼠标移动到高亮相关元素上，不隐藏高亮
+    if (relatedTarget && (relatedTarget === highlightBox || relatedTarget === tagLabel || relatedTarget === overlay || relatedTarget === selectedBox || relatedTarget === selectedLabel)) {
+      return;
+    }
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: null,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 点击事件处理
+  function handleClick(e) {
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免处理 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 检查是否是交互元素，这些元素需要保留默认行为
+    var isInteractiveElement = ['input', 'textarea', 'select', 'button', 'a'].includes(target.tagName.toLowerCase());
+
+    // 如果高亮功能启用，对于非交互元素阻止默认行为和事件传播
+    if (highlightEnabled) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+    console.log("Element clicked:", {
+      tagName: target.tagName,
+      selector: selector,
+      rect: rect
+    });
+
+    // 立即更新选中高亮
+    updateSelectedHighlight(target);
+
+    // 隐藏悬停高亮，因为现在是选中状态
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-click",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 监听来自父窗口的消息
+  function handleParentMessage(event) {
+    console.log("Received message from parent:", event.data);
+    if (event.data.type === "iframe-highlight-toggle") {
+      var enabled = event.data.enabled;
+      console.log("Highlight toggle:", enabled);
+      if (enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "enable-iframe-highlight") {
+      console.log("Enable iframe highlight");
+      enableHighlight();
+    } else if (event.data.type === "disable-iframe-highlight") {
+      console.log("Disable iframe highlight");
+      disableHighlight();
+    } else if (event.data.type === "toggle-iframe-highlight") {
+      var _enabled = event.data.enabled !== undefined ? event.data.enabled : !highlightEnabled;
+      console.log("Toggle iframe highlight to:", _enabled);
+      if (_enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "update-selected-element") {
+      var selector = event.data.selector;
+      console.log("Update selected element with selector:", selector);
+      if (selector) {
+        try {
+          var element = document.querySelector(selector);
+          console.log("Found element by selector:", element);
+          updateSelectedHighlight(element);
+        } catch (error) {
+          console.warn("Failed to select element:", error);
+          updateSelectedHighlight(null);
+        }
+      } else {
+        updateSelectedHighlight(null);
+      }
+    } else if (event.data.type === "clear-selected-element") {
+      console.log("Clear selected element");
+      updateSelectedHighlight(null);
+    }
+  }
+
+  // 启用高亮功能
+  function enableHighlight() {
+    console.log("Enabling highlight");
+    document.addEventListener("mouseover", handleMouseOver, true);
+    document.addEventListener("mouseout", handleMouseOut, true);
+    document.addEventListener("click", handleClick, true);
+    highlightEnabled = true;
+    overlay.style.display = "block";
+  }
+
+  // 禁用高亮功能
+  function disableHighlight() {
+    console.log("Disabling highlight");
+    highlightEnabled = false;
+    // 保持事件监听器，但通过 highlightEnabled 变量控制行为
+    // 这样可以保留选中状态的显示
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    // 不隐藏 selectedBox 和 selectedLabel，保留选中状态
+  }
+
+  // 完全禁用高亮功能（移除所有监听器）
+  function fullyDisableHighlight() {
+    console.log("Fully disabling highlight");
+    highlightEnabled = false;
+    document.removeEventListener("mouseover", handleMouseOver, true);
+    document.removeEventListener("mouseout", handleMouseOut, true);
+    document.removeEventListener("click", handleClick, true);
+    overlay.style.display = "none";
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    selectedBox.style.display = "none";
+    selectedLabel.style.display = "none";
+  }
+
+  // 添加事件监听
+  enableHighlight();
+  window.addEventListener("message", handleParentMessage);
+
+  // 暴露全局函数供外部调用
+  window.__iframeHighlightControl = {
+    enable: enableHighlight,
+    disable: disableHighlight,
+    fullyDisable: fullyDisableHighlight,
+    isEnabled: function isEnabled() {
+      return highlightEnabled;
+    },
+    getSelectedElement: function getSelectedElement() {
+      return selectedElement;
+    },
+    updateSelected: updateSelectedHighlight,
+    // 通过消息发送开关控制
+    sendToggleMessage: function sendToggleMessage(enabled) {
+      window.parent.postMessage({
+        type: 'iframe-highlight-status',
+        enabled: enabled || highlightEnabled,
+        source: 'iframe-highlight-injector'
+      }, '*');
+    }
+  };
+
+  // 通知父窗口脚本已加载
+  try {
+    window.parent.postMessage({
+      type: "iframe-highlight-ready",
+      data: {
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: Date.now()
+      },
+      source: "iframe-highlight-injector"
+    }, "*");
+  } catch (error) {
+    console.warn("无法发送就绪消息到父窗口:", error);
+  }
+
+  // 清理函数
+  window.__iframeHighlightCleanup = function () {
+    fullyDisableHighlight();
+    window.removeEventListener("message", handleParentMessage);
+    if (overlay.parentElement) {
+      overlay.parentElement.removeChild(overlay);
+    }
+    delete window.__iframeHighlightInitialized;
+    delete window.__iframeHighlightCleanup;
+  };
+})();
+
+</script>
+
+<script>
+/**
+ * Iframe 元素高亮注入脚本
+ * 需要在目标网站中引入此脚本来支持跨域 iframe 高亮功能
+ *
+ * 使用方法：
+ * 1. 将此脚本添加到目标网站的 HTML 中
+ * 2. 或通过浏览器扩展、用户脚本等方式注入
+ */
+
+(function () {
+  "use strict";
+
+  // 检查是否在 iframe 中
+  if (window.self === window.top) {
+    return; // 不在 iframe 中，不执行
+  }
+
+  // 检查是否已经初始化过
+  if (window.__iframeHighlightInitialized) {
+    return;
+  }
+  window.__iframeHighlightInitialized = true;
+  console.log("Iframe 高亮脚本已加载");
+
+  // 创建高亮覆盖层
+  var overlay = document.createElement("div");
+  overlay.id = "iframe-highlight-overlay";
+  overlay.style.cssText = "\n    position: fixed;\n    top: 0;\n    left: 0;\n    width: 100vw;\n    height: 100vh;\n    pointer-events: none;\n    z-index: 999999;\n    overflow: hidden;\n  ";
+
+  // 创建悬停高亮框（虚线边框）
+  var highlightBox = document.createElement("div");
+  highlightBox.id = "iframe-highlight-box";
+  highlightBox.style.cssText = "\n    position: absolute;\n    border: 2px dashed #007AFF;\n    background: rgba(0, 122, 255, 0.08);\n    pointer-events: none;\n    display: none;\n    transition: all 0.1s ease;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);\n    border-radius: 2px;\n  ";
+
+  // 创建选中节点的常驻高亮框（实线边框）
+  var selectedBox = document.createElement("div");
+  selectedBox.id = "iframe-selected-box";
+  selectedBox.style.cssText = "\n    position: absolute;\n    border: 2px solid #007AFF;\n    pointer-events: none;\n    display: none;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 107, 53, 0.4);\n    border-radius: 2px;\n    z-index: 1000000;\n  ";
+
+  // 创建悬停标签显示
+  var tagLabel = document.createElement("div");
+  tagLabel.id = "iframe-tag-label";
+  tagLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 2px 6px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 2px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000001;\n    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);\n    font-weight: 500;\n  ";
+
+  // 创建选中节点标签
+  var selectedLabel = document.createElement("div");
+  selectedLabel.id = "iframe-selected-label";
+  selectedLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 3px 8px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 3px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000002;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);\n    font-weight: 600;\n  ";
+  overlay.appendChild(highlightBox);
+  overlay.appendChild(selectedBox);
+  overlay.appendChild(tagLabel);
+  overlay.appendChild(selectedLabel);
+  document.body.appendChild(overlay);
+
+  // 存储当前选中的元素
+  var selectedElement = null;
+  var highlightEnabled = false;
+
+  // 更新选中元素的高亮显示
+  function updateSelectedHighlight(element) {
+    console.log("updateSelectedHighlight called with:", element);
+    if (!element) {
+      selectedBox.style.display = "none";
+      selectedLabel.style.display = "none";
+      selectedElement = null;
+      console.log("Cleared selected highlight");
+      return;
+    }
+    selectedElement = element;
+    var rect = element.getBoundingClientRect();
+    console.log("Selected element rect:", rect);
+
+    // 更新选中高亮框位置
+    selectedBox.style.display = "block";
+    selectedBox.style.left = "".concat(rect.left - 2, "px");
+    selectedBox.style.top = "".concat(rect.top - 2, "px");
+    selectedBox.style.width = "".concat(rect.width + 4, "px");
+    selectedBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新选中标签位置和内容
+    selectedLabel.style.display = "block";
+    selectedLabel.textContent = "\u2713 <".concat(element.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 28;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 5) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    var labelWidth = selectedLabel.offsetWidth || 100; // 预估宽度
+    if (labelLeft + labelWidth > window.innerWidth - 10) {
+      labelLeft = window.innerWidth - labelWidth - 10;
+    }
+    selectedLabel.style.left = "".concat(Math.max(5, labelLeft), "px");
+    selectedLabel.style.top = "".concat(labelTop, "px");
+    console.log("Selected highlight positioned at:", {
+      left: selectedBox.style.left,
+      top: selectedBox.style.top,
+      width: selectedBox.style.width,
+      height: selectedBox.style.height
+    });
+  }
+  function getElementSelector(element) {
+    if (!(element instanceof Element)) throw new Error('Argument must be a DOM element');
+    var segments = [];
+    var current = element;
+    while (current !== document.documentElement) {
+      var selector = '';
+      // 优先检查唯一ID
+      if (current.id && document.querySelectorAll("#".concat(current.id)).length === 1) {
+        segments.unshift("#".concat(current.id));
+        break; // ID唯一，无需继续向上
+      }
+
+      // 生成类名选择器（取第一个有效类名）
+      var classes = Array.from(current.classList).filter(function (c) {
+        return !c.startsWith('js-');
+      });
+      var className = classes.length > 0 ? ".".concat(classes[0]) : '';
+
+      // 生成位置索引（nth-child）
+      var tag = current.tagName.toLowerCase();
+      if (!className) {
+        var siblings = Array.from(current.parentNode.children);
+        var index = siblings.findIndex(function (el) {
+          return el === current;
+        }) + 1;
+        selector = "".concat(tag, ":nth-child(").concat(index, ")");
+      } else {
+        selector = className;
+      }
+      segments.unshift(selector);
+      current = current.parentElement;
+    }
+
+    // 处理根元素
+    if (current === document.documentElement) {
+      segments.unshift('html');
+    }
+    return segments.join(' > ');
+  }
+
+  // 获取元素文本内容
+  function getElementText(element) {
+    var _element$textContent;
+    if (element.tagName === "INPUT") {
+      return element.value || element.placeholder || "";
+    }
+    if (element.tagName === "TEXTAREA") {
+      return element.value || element.placeholder || "";
+    }
+    var text = ((_element$textContent = element.textContent) === null || _element$textContent === void 0 ? void 0 : _element$textContent.trim()) || "";
+    return text.length > 50 ? text.substring(0, 50) + "..." : text;
+  }
+
+  // 获取元素属性信息
+  function getElementAttributes(element) {
+    var attrs = {};
+    for (var i = 0; i < element.attributes.length; i++) {
+      var attr = element.attributes[i];
+      attrs[attr.name] = attr.value;
+    }
+    return attrs;
+  }
+
+  // 鼠标悬停事件处理
+  function handleMouseOver(e) {
+    if (!highlightEnabled) return;
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免高亮 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 如果是已选中的元素，不显示悬停高亮
+    if (target === selectedElement) {
+      highlightBox.style.display = "none";
+      tagLabel.style.display = "none";
+      return;
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+
+    // 更新悬停高亮框位置
+    highlightBox.style.display = "block";
+    highlightBox.style.left = "".concat(rect.left - 2, "px");
+    highlightBox.style.top = "".concat(rect.top - 2, "px");
+    highlightBox.style.width = "".concat(rect.width + 4, "px");
+    highlightBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新标签位置和内容
+    tagLabel.style.display = "block";
+    tagLabel.textContent = "<".concat(target.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 22;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 0) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    if (labelLeft + tagLabel.offsetWidth > window.innerWidth) {
+      labelLeft = window.innerWidth - tagLabel.offsetWidth - 5;
+    }
+    tagLabel.style.left = "".concat(Math.max(0, labelLeft), "px");
+    tagLabel.style.top = "".concat(labelTop, "px");
+
+    // 发送消息到父窗口
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 鼠标离开事件处理
+  function handleMouseOut(e) {
+    if (!highlightEnabled) return;
+    var relatedTarget = e.relatedTarget;
+
+    // 如果鼠标移动到高亮相关元素上，不隐藏高亮
+    if (relatedTarget && (relatedTarget === highlightBox || relatedTarget === tagLabel || relatedTarget === overlay || relatedTarget === selectedBox || relatedTarget === selectedLabel)) {
+      return;
+    }
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: null,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 点击事件处理
+  function handleClick(e) {
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免处理 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 检查是否是交互元素，这些元素需要保留默认行为
+    var isInteractiveElement = ['input', 'textarea', 'select', 'button', 'a'].includes(target.tagName.toLowerCase());
+
+    // 如果高亮功能启用，对于非交互元素阻止默认行为和事件传播
+    if (highlightEnabled) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+    console.log("Element clicked:", {
+      tagName: target.tagName,
+      selector: selector,
+      rect: rect
+    });
+
+    // 立即更新选中高亮
+    updateSelectedHighlight(target);
+
+    // 隐藏悬停高亮，因为现在是选中状态
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-click",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 监听来自父窗口的消息
+  function handleParentMessage(event) {
+    console.log("Received message from parent:", event.data);
+    if (event.data.type === "iframe-highlight-toggle") {
+      var enabled = event.data.enabled;
+      console.log("Highlight toggle:", enabled);
+      if (enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "enable-iframe-highlight") {
+      console.log("Enable iframe highlight");
+      enableHighlight();
+    } else if (event.data.type === "disable-iframe-highlight") {
+      console.log("Disable iframe highlight");
+      disableHighlight();
+    } else if (event.data.type === "toggle-iframe-highlight") {
+      var _enabled = event.data.enabled !== undefined ? event.data.enabled : !highlightEnabled;
+      console.log("Toggle iframe highlight to:", _enabled);
+      if (_enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "update-selected-element") {
+      var selector = event.data.selector;
+      console.log("Update selected element with selector:", selector);
+      if (selector) {
+        try {
+          var element = document.querySelector(selector);
+          console.log("Found element by selector:", element);
+          updateSelectedHighlight(element);
+        } catch (error) {
+          console.warn("Failed to select element:", error);
+          updateSelectedHighlight(null);
+        }
+      } else {
+        updateSelectedHighlight(null);
+      }
+    } else if (event.data.type === "clear-selected-element") {
+      console.log("Clear selected element");
+      updateSelectedHighlight(null);
+    }
+  }
+
+  // 启用高亮功能
+  function enableHighlight() {
+    console.log("Enabling highlight");
+    document.addEventListener("mouseover", handleMouseOver, true);
+    document.addEventListener("mouseout", handleMouseOut, true);
+    document.addEventListener("click", handleClick, true);
+    highlightEnabled = true;
+    overlay.style.display = "block";
+  }
+
+  // 禁用高亮功能
+  function disableHighlight() {
+    console.log("Disabling highlight");
+    highlightEnabled = false;
+    // 保持事件监听器，但通过 highlightEnabled 变量控制行为
+    // 这样可以保留选中状态的显示
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    // 不隐藏 selectedBox 和 selectedLabel，保留选中状态
+  }
+
+  // 完全禁用高亮功能（移除所有监听器）
+  function fullyDisableHighlight() {
+    console.log("Fully disabling highlight");
+    highlightEnabled = false;
+    document.removeEventListener("mouseover", handleMouseOver, true);
+    document.removeEventListener("mouseout", handleMouseOut, true);
+    document.removeEventListener("click", handleClick, true);
+    overlay.style.display = "none";
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    selectedBox.style.display = "none";
+    selectedLabel.style.display = "none";
+  }
+
+  // 添加事件监听
+  enableHighlight();
+  window.addEventListener("message", handleParentMessage);
+
+  // 暴露全局函数供外部调用
+  window.__iframeHighlightControl = {
+    enable: enableHighlight,
+    disable: disableHighlight,
+    fullyDisable: fullyDisableHighlight,
+    isEnabled: function isEnabled() {
+      return highlightEnabled;
+    },
+    getSelectedElement: function getSelectedElement() {
+      return selectedElement;
+    },
+    updateSelected: updateSelectedHighlight,
+    // 通过消息发送开关控制
+    sendToggleMessage: function sendToggleMessage(enabled) {
+      window.parent.postMessage({
+        type: 'iframe-highlight-status',
+        enabled: enabled || highlightEnabled,
+        source: 'iframe-highlight-injector'
+      }, '*');
+    }
+  };
+
+  // 通知父窗口脚本已加载
+  try {
+    window.parent.postMessage({
+      type: "iframe-highlight-ready",
+      data: {
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: Date.now()
+      },
+      source: "iframe-highlight-injector"
+    }, "*");
+  } catch (error) {
+    console.warn("无法发送就绪消息到父窗口:", error);
+  }
+
+  // 清理函数
+  window.__iframeHighlightCleanup = function () {
+    fullyDisableHighlight();
+    window.removeEventListener("message", handleParentMessage);
+    if (overlay.parentElement) {
+      overlay.parentElement.removeChild(overlay);
+    }
+    delete window.__iframeHighlightInitialized;
+    delete window.__iframeHighlightCleanup;
+  };
+})();
+
+</script>
+</body>
+</html>
