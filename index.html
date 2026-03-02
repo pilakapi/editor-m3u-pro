@@ -534,23 +534,37 @@
 
         // Función para hacer requests autenticadas
         async function authFetch(url, options = {}) {
-            const response = await fetch(url, {
-                ...options,
-                headers: {
-                    ...options.headers,
-                    'Authorization': `Bearer ${authToken}`
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers: {
+                        ...options.headers,
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                // Solo cerrar sesión si es 401 Y el mensaje es de auth
+                if (response.status === 401) {
+                    try {
+                        const data = await response.json();
+                        if (data.error && (data.error.includes('No autorizado') || data.error.includes('PIN'))) {
+                            // Es真正的认证错误
+                            localStorage.removeItem('m3u_auth_token');
+                            authToken = null;
+                            showLogin();
+                            throw new Error('Sesión expirada');
+                        }
+                    } catch (e) {
+                        // No se pudo parsear, igual es error de auth
+                    }
                 }
-            });
 
-            if (response.status === 401) {
-                // Token expirado o inválido
-                localStorage.removeItem('m3u_auth_token');
-                authToken = null;
-                showLogin();
-                throw new Error('Sesión expirada');
+                return response;
+            } catch (error) {
+                // Error de red, no cerrar sesión
+                console.error('Error de red:', error);
+                throw error;
             }
-
-            return response;
         }
 
         // Cerrar sesión
@@ -806,6 +820,17 @@
                         body: JSON.stringify({ urls: batch })
                     });
 
+                    // Verificar que la respuesta sea válida
+                    if (!res.ok) {
+                        const errorText = await res.text();
+                        console.error('Error del servidor:', res.status, errorText);
+                        // Si es error de auth, ya se maneja en authFetch
+                        if (res.status !== 401) {
+                            showToast('Error del servidor: ' + res.status, 'error');
+                        }
+                        continue;
+                    }
+
                     const results = await res.json();
 
                     results.forEach((result, index) => {
@@ -829,7 +854,10 @@
 
                 } catch (error) {
                     console.error('Error en escaneo:', error);
-                    showToast('Error al escanear algunos canales', 'error');
+                    // No mostrar error de sesión expirada como toast de error de escaneo
+                    if (error.message !== 'Sesión expirada') {
+                        showToast('Error al escanear algunos canales', 'error');
+                    }
                 }
 
                 await new Promise(r => setTimeout(r, 500));
@@ -979,6 +1007,13 @@
                     body: JSON.stringify({ url: channel.url })
                 });
 
+                // Verificar que la respuesta sea válida
+                if (!res.ok) {
+                    console.error('Error del servidor:', res.status);
+                    showToast('Error al probar canal', 'error');
+                    return;
+                }
+
                 const result = await res.json();
 
                 channel.status = result.status;
@@ -992,7 +1027,9 @@
                          channel.status === 'online' ? 'success' : 'error');
 
             } catch (error) {
-                showToast('Error al probar canal', 'error');
+                if (error.message !== 'Sesión expirada') {
+                    showToast('Error al probar canal', 'error');
+                }
             } finally {
                 btn.innerHTML = '<i class="fas fa-bolt"></i>';
                 btn.disabled = false;
