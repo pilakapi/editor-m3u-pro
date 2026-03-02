@@ -700,7 +700,10 @@
                             </div>
                         </td>
                         <td class="px-4 py-3">
-                            <span class="text-slate-400">${channel.group}</span>
+                            <input type="text" value="${channel.group}"
+                                onchange="updateChannelGroup(${channel.id}, this.value)"
+                                placeholder="Categoría"
+                                class="bg-dark-700 border border-dark-600 rounded px-2 py-1 text-sm text-slate-400 focus:outline-none focus:border-indigo-500 w-32">
                         </td>
                         <td class="px-4 py-3">
                             <input type="text" value="${channel.url}"
@@ -755,6 +758,14 @@
                 channel.logo = newLogo;
                 renderChannels();
                 showToast('Logo actualizado', 'success');
+            }
+        }
+
+        function updateChannelGroup(id, newGroup) {
+            const channel = channels.find(c => c.id === id);
+            if (channel) {
+                channel.group = newGroup;
+                showToast('Categoría actualizada', 'success');
             }
         }
 
