@@ -114,8 +114,8 @@ app.post("/api/login", (req, res) => {
     }
 
     if (pin === PIN) {
-        // Generar un token simple (en producción usar JWT)
-        const token = Buffer.from(`${PIN}:${Date.now()}`).toString('base64');
+        // Generar un token simple sin caracteres problemáticos
+        const token = `${PIN}-${Date.now()}`;
         res.json({
             success: true,
             token: token,
